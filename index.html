@@ -161,6 +161,90 @@
       text-align: center;
     }
     
+    .instrument-selector {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .instrument-selector label {
+      font-size: 1rem;
+      color: #b8c6db;
+      font-weight: 600;
+    }
+    
+    .instrument-selector select {
+      flex-grow: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 0.9rem;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url(\'data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffd700%22%20d%3D%22M287%2C197.3L159.3%2C69.6c-3.8-3.8-10.2-3.8-14%2C0L5.4%2C197.3c-3.8%2C3.8-3.8%2C10.2%2C0%2C14l14%2C14c3.8%2C3.8%2C10.2%2C3.8%2C14%2C0l116.6-116.6c3.8-3.8%2C10.2-3.8%2C14%2C0l116.6%2C116.6c3.8%2C3.8%2C10.2%2C3.8%2C14%2C0l14-14C290.8%2C207.5%2C290.8%2C201.1%2C287%2C197.3z%22%2F%3E%3C%2Fsvg%3E\');
+      background-repeat: no-repeat;
+      background-position: right 10px top 50%;
+      background-size: 12px auto;
+      cursor: pointer;
+    }
+    
+    .instrument-selector select option {
+      background: #1a1a2e;
+      color: #fff;
+    }
+    
+    .melody-section {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    
+    .melody-section h3 {
+      margin: 0 0 15px 0;
+      font-size: 1.3rem;
+      color: #ffd700;
+      text-align: center;
+    }
+    
+    .melody-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    
+    .melody-button {
+      background: linear-gradient(145deg, #2a2a3e, #1e1e2e);
+      border: 2px solid rgba(255, 215, 0, 0.3);
+      border-radius: 10px;
+      padding: 12px 8px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    .melody-button:hover {
+      background: linear-gradient(145deg, #3a3a4e, #2e2e3e);
+      border-color: #ffd700;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 215, 0, 0.3);
+    }
+    
     .chord-examples {
       background: rgba(255, 255, 255, 0.08);
       backdrop-filter: blur(10px);
@@ -461,6 +545,25 @@
       <div class="current-chord" id="currentChord">-</div>
     </div>
     
+    <div class="instrument-selector">
+      <label for="instrumentSelect">Instrumento:</label>
+      <select id="instrumentSelect">
+        <option value="sine">Piano (Padrão)</option>
+        <option value="square">Órgão</option>
+        <option value="triangle">Sintetizador</option>
+        <option value="sawtooth">Guitarra</option>
+      </select>
+    </div>
+    
+    <div class="melody-section">
+      <h3>🎶 Melodias para Aprender</h3>
+      <div class="melody-grid" id="melodyGrid">
+        <button class="melody-button" data-melody="twinkle">Brilha, Brilha, Estrelinha</button>
+        <button class="melody-button" data-melody="odeToJoy">Ode à Alegria</button>
+        <button class="melody-button" data-melody="maryHadALittleLamb">Mary Had a Little Lamb</button>
+      </div>
+    </div>
+    
     <div class="chord-examples">
       <h3>📚 Exemplos de Acordes</h3>
       <div class="chord-grid" id="chordGrid">
@@ -475,7 +578,7 @@
         <button class="chord-button" data-chord="G7">G7</button>
         <button class="chord-button" data-chord="F7">F7</button>
         <button class="chord-button" data-chord="Am7">Am7</button>
-        <button class="chord-button" data-chord="Dm7">Dm7</button>
+        <button class="chord-button" data-chord="Dm7">Dm7</n></button>
       </div>
     </div>
     
@@ -512,6 +615,8 @@
         this.currentOctave = 4;
         this.sustainMode = false;
         this.sustainedKeys = new Set();
+        this.currentInstrument = 'sine'; // Default instrument
+        this.melodyPlaybackInterval = null;
         
         this.chordDefinitions = {
           'C': ['C', 'E', 'G'],
@@ -526,6 +631,45 @@
           'F7': ['F', 'A', 'C', 'Eb'],
           'Am7': ['A', 'C', 'E', 'G'],
           'Dm7': ['D', 'F', 'A', 'C']
+        };
+
+        this.melodies = {
+          'twinkle': [
+            { note: 'C4', duration: 0.5 }, { note: 'C4', duration: 0.5 },
+            { note: 'G4', duration: 0.5 }, { note: 'G4', duration: 0.5 },
+            { note: 'A4', duration: 0.5 }, { note: 'A4', duration: 0.5 },
+            { note: 'G4', duration: 1 },
+            { note: 'F4', duration: 0.5 }, { note: 'F4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'D4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'C4', duration: 1 }
+          ],
+          'odeToJoy': [
+            { note: 'E4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'F4', duration: 0.5 }, { note: 'G4', duration: 0.5 },
+            { note: 'G4', duration: 0.5 }, { note: 'F4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'C4', duration: 0.5 }, { note: 'C4', duration: 0.5 },
+            { note: 'D4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'E4', duration: 0.75 }, { note: 'D4', duration: 0.25 }, { note: 'D4', duration: 1 }
+          ],
+          'maryHadALittleLamb': [
+            { note: 'E4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'C4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'E4', duration: 1 },
+            { note: 'D4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'D4', duration: 1 },
+            { note: 'E4', duration: 0.5 }, { note: 'G4', duration: 0.5 },
+            { note: 'G4', duration: 1 },
+            { note: 'E4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'C4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'E4', duration: 0.5 },
+            { note: 'D4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'E4', duration: 0.5 }, { note: 'D4', duration: 0.5 },
+            { note: 'C4', duration: 1 }
+          ]
         };
         
         this.noteFrequencies = this.generateFrequencies();
@@ -551,6 +695,7 @@
         this.setupEventListeners();
         this.createKeyboard();
         this.setupChordButtons();
+        this.setupMelodyButtons();
       }
       
       setupEventListeners() {
@@ -565,6 +710,11 @@
           if (e.target.classList.contains('octave-btn')) {
             this.changeOctave(parseInt(e.target.dataset.octave));
           }
+        });
+        
+        document.getElementById('instrumentSelect').addEventListener('change', (e) => {
+          this.currentInstrument = e.target.value;
+          this.showFeedback(`Instrumento: ${e.target.options[e.target.selectedIndex].text}`);
         });
         
         // Prevenir zoom em double tap
@@ -697,7 +847,7 @@
           const oscillator = this.audioCtx.createOscillator();
           const gainNode = this.audioCtx.createGain();
           
-          oscillator.type = 'sine';
+          oscillator.type = this.currentInstrument; // Use selected instrument type
           oscillator.frequency.setValueAtTime(frequency, this.audioCtx.currentTime);
           
           gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
@@ -854,6 +1004,69 @@
         setTimeout(() => {
           feedback.style.opacity = '0';
         }, 1500);
+      }
+
+      setupMelodyButtons() {
+        document.getElementById('melodyGrid').addEventListener('click', (e) => {
+          if (e.target.classList.contains('melody-button')) {
+            const melodyName = e.target.dataset.melody;
+            this.playMelody(melodyName);
+          }
+        });
+      }
+
+      playMelody(melodyName) {
+        if (this.melodyPlaybackInterval) {
+          clearInterval(this.melodyPlaybackInterval);
+          this.melodyPlaybackInterval = null;
+          this.clearActiveNotes();
+          this.showFeedback('Melodia Parada');
+          return;
+        }
+
+        const melody = this.melodies[melodyName];
+        if (!melody) return;
+
+        let noteIndex = 0;
+        const tempo = 120; // BPM
+        const beatDuration = 60 / tempo; // Duration of a beat in seconds
+
+        this.showFeedback(`Tocando: ${melodyName}`);
+
+        this.melodyPlaybackInterval = setInterval(() => {
+          if (noteIndex < melody.length) {
+            const note = melody[noteIndex];
+            this.playNote(note.note);
+            this.highlightKey(note.note);
+            this.updateCurrentNote(note.note);
+
+            setTimeout(() => {
+              this.stopNote(note.note);
+              this.unhighlightKey(note.note);
+            }, note.duration * beatDuration * 1000 * 0.8); // Stop note slightly before next
+
+            noteIndex++;
+          } else {
+            clearInterval(this.melodyPlaybackInterval);
+            this.melodyPlaybackInterval = null;
+            this.clearActiveNotes();
+            this.showFeedback('Melodia Concluída');
+          }
+        }, beatDuration * 1000);
+      }
+
+      highlightKey(note) {
+        const key = document.querySelector(`[data-note="${note}"]`);
+        if (key) {
+          key.classList.add('active');
+        }
+      }
+
+      unhighlightKey(note) {
+        const key = document.querySelector(`[data-note="${note}"]`);
+        if (key) {
+          key.classList.remove('active');
+        }
       }
     }
     
