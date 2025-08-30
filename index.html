@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Teclado Musical Virtual</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(to bottom, #222, #444);
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+    
+    h1 {
+      padding: 15px 10px;
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      color: #ffcc00;
+      margin: 0;
+    }
+    
+    #instructions {
+      margin: 10px;
+      font-size: clamp(0.9rem, 3vw, 1.1rem);
+      color: #ddd;
+      line-height: 1.4;
+    }
+    
+    #audio-init {
+      background: #ffcc00;
+      color: #222;
+      border: none;
+      padding: 15px 30px;
+      font-size: 1.1rem;
+      border-radius: 25px;
+      cursor: pointer;
+      margin: 20px;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+    
+    #audio-init:hover {
+      background: #ffd700;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 204, 0, 0.4);
+    }
+    
+    #keyboard-container {
+      position: relative;
+      padding: 10px;
+      background: #333;
+      margin: 10px;
+      border-radius: 10px;
+      box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);
+    }
+    
+    #keyboard {
+      display: flex;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: #ffcc00 #333;
+      padding: 10px 0;
+      min-height: 200px;
+      position: relative;
+    }
+    
+    #keyboard::-webkit-scrollbar {
+      height: 8px;
+    }
+    
+    #keyboard::-webkit-scrollbar-track {
+      background: #333;
+      border-radius: 4px;
+    }
+    
+    #keyboard::-webkit-scrollbar-thumb {
+      background: #ffcc00;
+      border-radius: 4px;
+    }
+    
+    .scroll-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 204, 0, 0.8);
+      color: #222;
+      padding: 10px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0.7;
+      animation: pulse 2s infinite;
+    }
+    
+    .scroll-indicator.left {
+      left: 10px;
+    }
+    
+    .scroll-indicator.right {
+      right: 10px;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    
+    .key {
+      flex: 0 0 auto;
+      width: clamp(50px, 12vw, 70px);
+      height: clamp(160px, 35vw, 200px);
+      margin: 1px;
+      border: 2px solid #000;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 0 0 8px 8px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+      font-weight: bold;
+      transition: all 0.1s ease;
+      position: relative;
+      touch-action: manipulation;
+    }
+    
+    .white {
+      background: linear-gradient(to bottom, #fff 0%, #f0f0f0 100%);
+      color: #333;
+      z-index: 1;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .black {
+      background: linear-gradient(to bottom, #333 0%, #111 100%);
+      color: #fff;
+      width: clamp(35px, 8vw, 45px);
+      height: clamp(100px, 22vw, 130px);
+      margin-left: clamp(-17px, -4vw, -22px);
+      margin-right: clamp(-17px, -4vw, -22px);
+      z-index: 2;
+      position: relative;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    }
+    
+    .key.active {
+      background: #ffcc00 !important;
+      color: #222 !important;
+      transform: scale(0.95);
+      box-shadow: inset 0 4px 8px rgba(0,0,0,0.3);
+    }
+    
+    .key:hover {
+      filter: brightness(1.1);
+    }
+    
+    .feedback {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 204, 0, 0.9);
+      color: #222;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .note-display {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: #ffcc00;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      z-index: 100;
+      min-width: 80px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    @media (orientation: landscape) and (max-height: 500px) {
+      h1 {
+        font-size: 1.2rem;
+        padding: 10px;
+      }
+      
+      #instructions {
+        font-size: 0.8rem;
+        margin: 5px;
+      }
+      
+      #keyboard-container {
+        margin: 5px;
+      }
+      
+      .key {
+        height: clamp(120px, 25vh, 150px);
+      }
+      
+      .black {
+        height: clamp(80px, 15vh, 100px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🎹 Teclado Musical Virtual</h1>
+  <p id="instructions">Toque no botão abaixo para ativar o áudio, depois toque nas teclas para ouvir o som.<br>
+  Funciona no computador e no celular 📱💻</p>
+  
+  <button id="audio-init">🔊 Ativar Áudio</button>
+  
+  <div id="keyboard-container" style="display: none;">
+    <div class="scroll-indicator left">←</div>
+    <div class="scroll-indicator right">→</div>
+    <div id="keyboard"></div>
+  </div>
+  
+  <div class="feedback" id="feedback"></div>
+  <div class="note-display" id="note-display"></div>
+
+  <script>
+    let audioCtx = null;
+    let isAudioInitialized = false;
+    let activeKeys = new Set();
+    
+    // Notas (3 oitavas: A3 até C6)
+    const notes = [
+      "A3","A#3","B3",
+      "C4","C#4","D4","D#4","E4","F4","F#4","G4","G#4",
+      "A4","A#4","B4",
+      "C5","C#5","D5","D#5","E5","F5","F#5","G5","G#5",
+      "A5","A#5","B5",
+      "C6"
+    ];
+
+    const keyboard = document.getElementById("keyboard");
+    const audioInitBtn = document.getElementById("audio-init");
+    const keyboardContainer = document.getElementById("keyboard-container");
+    const feedback = document.getElementById("feedback");
+    const noteDisplay = document.getElementById("note-display");
+
+    // Frequências aproximadas
+    const frequencies = {
+      "A3": 220.00, "A#3": 233.08, "B3": 246.94,
+      "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13, "E4": 329.63,
+      "F4": 349.23, "F#4": 369.99, "G4": 392.00, "G#4": 415.30,
+      "A4": 440.00, "A#4": 466.16, "B4": 493.88,
+      "C5": 523.25, "C#5": 554.37, "D5": 587.33, "D#5": 622.25, "E5": 659.25,
+      "F5": 698.46, "F#5": 739.99, "G5": 783.99, "G#5": 830.61,
+      "A5": 880.00, "A#5": 932.33, "B5": 987.77,
+      "C6": 1046.50
+    };
+
+    // Inicializar áudio
+    audioInitBtn.addEventListener("click", async () => {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+        
+        isAudioInitialized = true;
+        audioInitBtn.style.display = "none";
+        keyboardContainer.style.display = "block";
+        
+        showFeedback("Áudio ativado! 🎵");
+        
+        // Criar teclas
+        createKeyboard();
+        
+      } catch (error) {
+        console.error("Erro ao inicializar áudio:", error);
+        showFeedback("Erro ao ativar áudio ❌");
+      }
+    });
+
+    function createKeyboard() {
+      notes.forEach(note => {
+        const key = document.createElement("div");
+        key.classList.add("key");
+        key.dataset.note = note;
+        
+        if (note.includes("#")) {
+          key.classList.add("black");
+        } else {
+          key.classList.add("white");
+        }
+        
+        key.textContent = note.replace("3","").replace("4","").replace("5","").replace("6","");
+        
+        // Event listeners para toque e mouse
+        key.addEventListener("touchstart", handleKeyStart, { passive: false });
+        key.addEventListener("touchend", handleKeyEnd, { passive: false });
+        key.addEventListener("mousedown", handleKeyStart);
+        key.addEventListener("mouseup", handleKeyEnd);
+        key.addEventListener("mouseleave", handleKeyEnd);
+        
+        keyboard.appendChild(key);
+      });
+      
+      // Esconder indicadores de scroll após um tempo
+      setTimeout(() => {
+        document.querySelectorAll('.scroll-indicator').forEach(indicator => {
+          indicator.style.opacity = '0';
+        });
+      }, 3000);
+    }
+
+    function handleKeyStart(event) {
+      event.preventDefault();
+      
+      const key = event.target;
+      const note = key.dataset.note;
+      
+      if (activeKeys.has(note)) return;
+      
+      activeKeys.add(note);
+      key.classList.add("active");
+      
+      if (isAudioInitialized) {
+        playSound(note);
+        showNote(note);
+        
+        // Vibração em dispositivos móveis
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }
+    }
+
+    function handleKeyEnd(event) {
+      const key = event.target;
+      const note = key.dataset.note;
+      
+      activeKeys.delete(note);
+      key.classList.remove("active");
+    }
+
+    function playSound(note) {
+      if (!audioCtx || !isAudioInitialized) return;
+      
+      try {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.type = "sine";
+        osc.frequency.value = frequencies[note];
+        
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+        
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.8);
+        
+      } catch (error) {
+        console.error("Erro ao tocar som:", error);
+      }
+    }
+
+    function showFeedback(message) {
+      feedback.textContent = message;
+      feedback.style.opacity = "1";
+      
+      setTimeout(() => {
+        feedback.style.opacity = "0";
+      }, 2000);
+    }
+
+    function showNote(note) {
+      noteDisplay.textContent = note;
+      noteDisplay.style.opacity = "1";
+      
+      setTimeout(() => {
+        noteDisplay.style.opacity = "0";
+      }, 1000);
+    }
+
+    // Prevenir zoom em double tap
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (event) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+
+    // Prevenir scroll quando tocando nas teclas
+    document.addEventListener('touchmove', function(event) {
+      if (event.target.classList.contains('key')) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>
+
