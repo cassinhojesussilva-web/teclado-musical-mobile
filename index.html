@@ -65,6 +65,8 @@
       padding: 15px;
       margin-bottom: 20px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      flex-wrap: wrap;
+      gap: 10px;
     }
     
     .volume-control {
@@ -95,6 +97,44 @@
       border-radius: 50%;
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+    
+    .sustain-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .sustain-button {
+      background: linear-gradient(145deg, #2a2a3e, #1e1e2e);
+      border: 2px solid rgba(255, 215, 0, 0.3);
+      border-radius: 10px;
+      padding: 10px 15px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .sustain-button:hover {
+      background: linear-gradient(145deg, #3a3a4e, #2e2e3e);
+      border-color: #ffd700;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 215, 0, 0.3);
+    }
+    
+    .sustain-button.active {
+      background: linear-gradient(145deg, #ffd700, #ffed4e);
+      color: #1a1a2e;
+      border-color: #ffd700;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
     }
     
     .current-note {
@@ -188,6 +228,7 @@
       justify-content: center;
       gap: 5px;
       margin-bottom: 15px;
+      flex-wrap: wrap;
     }
     
     .octave-btn {
@@ -250,7 +291,7 @@
     }
     
     .key.white {
-      width: clamp(45px, 10vw, 60px);
+      width: clamp(35px, 8vw, 45px);
       height: clamp(150px, 30vw, 180px);
       background: linear-gradient(to bottom, #ffffff 0%, #f8f8f8 100%);
       color: #333;
@@ -261,15 +302,15 @@
     }
     
     .key.black {
-      width: clamp(30px, 6vw, 40px);
+      width: clamp(25px, 5vw, 30px);
       height: clamp(100px, 20vw, 120px);
       background: linear-gradient(to bottom, #333 0%, #111 100%);
       color: #fff;
       border: 2px solid #000;
       z-index: 2;
       position: relative;
-      margin-left: clamp(-15px, -3vw, -20px);
-      margin-right: clamp(-15px, -3vw, -20px);
+      margin-left: clamp(-12px, -2.5vw, -15px);
+      margin-right: clamp(-12px, -2.5vw, -15px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
       padding-bottom: 8px;
     }
@@ -279,6 +320,12 @@
       color: #1a1a2e !important;
       transform: scale(0.95);
       box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .key.sustained {
+      background: linear-gradient(to bottom, #00ff88 0%, #00cc66 100%) !important;
+      color: #1a1a2e !important;
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
     }
     
     .key.chord-highlight {
@@ -377,6 +424,16 @@
       .chord-grid {
         grid-template-columns: repeat(4, 1fr);
       }
+      
+      .key.white {
+        width: clamp(30px, 7vw, 40px);
+      }
+      
+      .key.black {
+        width: clamp(20px, 4vw, 25px);
+        margin-left: clamp(-10px, -2vw, -12px);
+        margin-right: clamp(-10px, -2vw, -12px);
+      }
     }
   </style>
 </head>
@@ -391,6 +448,13 @@
       <div class="volume-control">
         <span class="volume-icon">🔊</span>
         <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
+      </div>
+      
+      <div class="sustain-control">
+        <button class="sustain-button" id="sustainButton">
+          <span>🎵</span>
+          <span>Sustain</span>
+        </button>
       </div>
       
       <div class="current-note" id="currentNote">-</div>
@@ -417,6 +481,7 @@
     
     <div class="keyboard-container">
       <div class="octave-selector" id="octaveSelector">
+        <button class="octave-btn" data-octave="2">C2-B2</button>
         <button class="octave-btn" data-octave="3">C3-B3</button>
         <button class="octave-btn active" data-octave="4">C4-B4</button>
         <button class="octave-btn" data-octave="5">C5-B5</button>
@@ -443,8 +508,10 @@
         this.isAudioInitialized = false;
         this.currentVolume = 0.7;
         this.activeNotes = new Set();
-        this.currentOctave = 4;
         this.sustainedNotes = new Map();
+        this.currentOctave = 4;
+        this.sustainMode = false;
+        this.sustainedKeys = new Set();
         
         this.chordDefinitions = {
           'C': ['C', 'E', 'G'],
@@ -469,7 +536,7 @@
         const frequencies = {};
         const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         
-        for (let octave = 3; octave <= 7; octave++) {
+        for (let octave = 2; octave <= 7; octave++) {
           noteNames.forEach((note, index) => {
             const noteNumber = (octave - 4) * 12 + index;
             const frequency = 440 * Math.pow(2, (noteNumber - 9) / 12);
@@ -491,6 +558,8 @@
         document.getElementById('volumeSlider').addEventListener('input', (e) => {
           this.currentVolume = e.target.value / 100;
         });
+        
+        document.getElementById('sustainButton').addEventListener('click', () => this.toggleSustain());
         
         document.getElementById('octaveSelector').addEventListener('click', (e) => {
           if (e.target.classList.contains('octave-btn')) {
@@ -531,23 +600,27 @@
         const keyboard = document.getElementById('keyboard');
         keyboard.innerHTML = '';
         
+        // Criar 2 oitavas completas para mais teclas visíveis
+        const octaves = [this.currentOctave, this.currentOctave + 1];
         const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         
-        noteNames.forEach(noteName => {
-          const key = document.createElement('div');
-          key.classList.add('key');
-          key.dataset.note = `${noteName}${this.currentOctave}`;
-          
-          if (noteName.includes('#')) {
-            key.classList.add('black');
-            key.textContent = noteName.replace('#', '♯');
-          } else {
-            key.classList.add('white');
-            key.textContent = noteName;
-          }
-          
-          this.setupKeyEvents(key);
-          keyboard.appendChild(key);
+        octaves.forEach(octave => {
+          noteNames.forEach(noteName => {
+            const key = document.createElement('div');
+            key.classList.add('key');
+            key.dataset.note = `${noteName}${octave}`;
+            
+            if (noteName.includes('#')) {
+              key.classList.add('black');
+              key.textContent = noteName.replace('#', '♯');
+            } else {
+              key.classList.add('white');
+              key.textContent = noteName;
+            }
+            
+            this.setupKeyEvents(key);
+            keyboard.appendChild(key);
+          });
         });
       }
       
@@ -568,9 +641,19 @@
         
         const handleEnd = (e) => {
           const note = key.dataset.note;
-          this.stopNote(note);
-          key.classList.remove('active');
-          this.activeNotes.delete(note);
+          
+          if (this.sustainMode) {
+            // Em modo sustain, adicionar à lista de teclas sustentadas
+            this.sustainedKeys.add(note);
+            key.classList.remove('active');
+            key.classList.add('sustained');
+          } else {
+            // Modo normal, parar a nota
+            this.stopNote(note);
+            key.classList.remove('active');
+            this.activeNotes.delete(note);
+          }
+          
           this.checkForChord();
         };
         
@@ -579,6 +662,29 @@
         key.addEventListener('mousedown', handleStart);
         key.addEventListener('mouseup', handleEnd);
         key.addEventListener('mouseleave', handleEnd);
+      }
+      
+      toggleSustain() {
+        this.sustainMode = !this.sustainMode;
+        const sustainButton = document.getElementById('sustainButton');
+        
+        if (this.sustainMode) {
+          sustainButton.classList.add('active');
+          this.showFeedback('Sustain ATIVADO 🎵');
+        } else {
+          sustainButton.classList.remove('active');
+          this.showFeedback('Sustain DESATIVADO');
+          
+          // Parar todas as notas sustentadas
+          this.sustainedKeys.forEach(note => {
+            this.stopNote(note);
+            const key = document.querySelector(`[data-note="${note}"]`);
+            if (key) {
+              key.classList.remove('sustained');
+            }
+          });
+          this.sustainedKeys.clear();
+        }
       }
       
       playNote(note) {
@@ -596,13 +702,23 @@
           
           gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
           gainNode.gain.linearRampToValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 2);
+          
+          if (this.sustainMode) {
+            // Em modo sustain, manter o som até ser explicitamente parado
+            gainNode.gain.setValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
+          } else {
+            // Modo normal, fade out gradual
+            gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 2);
+          }
           
           oscillator.connect(gainNode);
           gainNode.connect(this.audioCtx.destination);
           
           oscillator.start(this.audioCtx.currentTime);
-          oscillator.stop(this.audioCtx.currentTime + 2);
+          
+          if (!this.sustainMode) {
+            oscillator.stop(this.audioCtx.currentTime + 2);
+          }
           
           this.sustainedNotes.set(note, { oscillator, gainNode });
           
@@ -630,7 +746,8 @@
       }
       
       checkForChord() {
-        const activeNoteNames = Array.from(this.activeNotes).map(note => note.replace(/\d+/, ''));
+        const allActiveNotes = new Set([...this.activeNotes, ...this.sustainedKeys]);
+        const activeNoteNames = Array.from(allActiveNotes).map(note => note.replace(/\d+/, ''));
         const chordDisplay = document.getElementById('currentChord');
         
         if (activeNoteNames.length < 3) {
@@ -726,6 +843,7 @@
         document.querySelector(`[data-octave="${octave}"]`).classList.add('active');
         
         this.clearActiveNotes();
+        this.sustainedKeys.clear();
       }
       
       showFeedback(message) {
