@@ -548,8 +548,8 @@
     <div class="instrument-selector">
       <label for="instrumentSelect">Instrumento:</label>
       <select id="instrumentSelect">
-        <option value="sine">Piano (Padrão)</option>
-        <option value="square">Órgão</option>
+        <option value="piano_samples">Piano (Padrão)</option>
+        <option value="sine">Órgão</option>
         <option value="triangle">Sintetizador</option>
         <option value="sawtooth">Guitarra</option>
       </select>
@@ -578,7 +578,7 @@
         <button class="chord-button" data-chord="G7">G7</button>
         <button class="chord-button" data-chord="F7">F7</button>
         <button class="chord-button" data-chord="Am7">Am7</button>
-        <button class="chord-button" data-chord="Dm7">Dm7</n></button>
+        <button class="chord-button" data-chord="Dm7">Dm7</button>
       </div>
     </div>
     
@@ -615,8 +615,10 @@
         this.currentOctave = 4;
         this.sustainMode = false;
         this.sustainedKeys = new Set();
-        this.currentInstrument = 'sine'; // Default instrument
+        this.currentInstrument = 'piano_samples'; // Default instrument to new samples
         this.melodyPlaybackInterval = null;
+        this.instrumentPlayer = null;
+        this.pianoSamples = {}; // To store loaded AudioBuffers
         
         this.chordDefinitions = {
           'C': ['C', 'E', 'G'],
@@ -672,23 +674,8 @@
           ]
         };
         
-        this.noteFrequencies = this.generateFrequencies();
+        this.noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         this.init();
-      }
-      
-      generateFrequencies() {
-        const frequencies = {};
-        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        
-        for (let octave = 2; octave <= 7; octave++) {
-          noteNames.forEach((note, index) => {
-            const noteNumber = (octave - 4) * 12 + index;
-            const frequency = 440 * Math.pow(2, (noteNumber - 9) / 12);
-            frequencies[`${note}${octave}`] = frequency;
-          });
-        }
-        
-        return frequencies;
       }
       
       init() {
@@ -714,6 +701,7 @@
         
         document.getElementById('instrumentSelect').addEventListener('change', (e) => {
           this.currentInstrument = e.target.value;
+          this.loadInstrument(this.currentInstrument);
           this.showFeedback(`Instrumento: ${e.target.options[e.target.selectedIndex].text}`);
         });
         
@@ -739,10 +727,40 @@
           this.isAudioInitialized = true;
           document.getElementById('audioInitOverlay').style.display = 'none';
           this.showFeedback('Áudio ativado! 🎵');
+          await this.loadInstrument(this.currentInstrument); // Ensure samples are loaded after context is active
           
         } catch (error) {
           console.error('Erro ao inicializar áudio:', error);
           this.showFeedback('Erro ao ativar áudio ❌');
+        }
+      }
+
+      async loadInstrument(instrumentName) {
+        if (instrumentName === 'piano_samples') {
+          if (Object.keys(this.pianoSamples).length === 0) { // Load only if not already loaded
+            this.showFeedback('Carregando samples de piano...');
+            const sampleNotes = ['C2', 'D2', 'E2', 'F2', 'G2', 'A2', 'B2',
+                                 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3',
+                                 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4',
+                                 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5',
+                                 'C6', 'D6', 'E6', 'F6', 'G6', 'A6', 'B6',
+                                 'C7']; // List of notes for which we have samples
+
+            for (const note of sampleNotes) {
+                try {
+                    const response = await fetch(`extracted_piano_samples/${note}.ogg`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    this.pianoSamples[note] = await this.audioCtx.decodeAudioData(arrayBuffer);
+                } catch (error) {
+                    console.error(`Erro ao carregar sample para ${note}:`, error);
+                    this.showFeedback(`Erro ao carregar sample para ${note} ❌`);
+                }
+            }
+            this.showFeedback('Samples de piano carregados!');
+          }
+        } else {
+          // For oscillator-based instruments, clear samples
+          this.pianoSamples = {};
         }
       }
       
@@ -840,241 +858,248 @@
       playNote(note) {
         if (!this.audioCtx || !this.isAudioInitialized) return;
         
-        try {
-          const frequency = this.noteFrequencies[note];
-          if (!frequency) return;
-          
-          const oscillator = this.audioCtx.createOscillator();
-          const gainNode = this.audioCtx.createGain();
-          
-          oscillator.type = this.currentInstrument; // Use selected instrument type
-          oscillator.frequency.setValueAtTime(frequency, this.audioCtx.currentTime);
-          
-          gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
-          
-          if (this.sustainMode) {
-            // Em modo sustain, manter o som até ser explicitamente parado
-            gainNode.gain.setValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
+        if (this.currentInstrument === 'piano_samples') {
+          const sample = this.pianoSamples[note];
+          if (sample) {
+            const source = this.audioCtx.createBufferSource();
+            source.buffer = sample;
+            const gainNode = this.audioCtx.createGain();
+            gainNode.gain.value = this.currentVolume;
+            source.connect(gainNode);
+            gainNode.connect(this.audioCtx.destination);
+            source.start(0);
+            
+            if (!this.sustainMode) {
+              // Implement a simple decay for non-sustained notes
+              gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 1.5);
+              source.stop(this.audioCtx.currentTime + 1.5);
+            }
+            this.sustainedNotes.set(note, { source, gainNode });
           } else {
-            // Modo normal, fade out gradual
-            gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 2);
+            console.warn(`Sample for note ${note} not found. Falling back to oscillator.`);
+            this.playOscillatorNote(note);
           }
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(this.audioCtx.destination);
-          
-          oscillator.start(this.audioCtx.currentTime);
-          
-          if (!this.sustainMode) {
-            oscillator.stop(this.audioCtx.currentTime + 2);
-          }
-          
-          this.sustainedNotes.set(note, { oscillator, gainNode });
-          
-        } catch (error) {
-          console.error('Erro ao tocar nota:', error);
+        } else {
+          this.playOscillatorNote(note);
         }
+      }
+
+      playOscillatorNote(note) {
+        const frequency = this.noteFrequencies[note];
+        if (!frequency) return;
+        
+        const oscillator = this.audioCtx.createOscillator();
+        const gainNode = this.audioCtx.createGain();
+        
+        oscillator.type = this.currentInstrument;
+        oscillator.frequency.setValueAtTime(frequency, this.audioCtx.currentTime);
+        
+        gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
+        
+        if (this.sustainMode) {
+          gainNode.gain.setValueAtTime(this.currentVolume * 0.3, this.audioCtx.currentTime + 0.01);
+        } else {
+          gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 2);
+        }
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioCtx.destination);
+        
+        oscillator.start(this.audioCtx.currentTime);
+        
+        if (!this.sustainMode) {
+          oscillator.stop(this.audioCtx.currentTime + 2);
+        }
+        
+        this.sustainedNotes.set(note, { oscillator, gainNode });
       }
       
       stopNote(note) {
         const sustained = this.sustainedNotes.get(note);
         if (sustained) {
           try {
-            sustained.gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1);
-            sustained.oscillator.stop(this.audioCtx.currentTime + 0.1);
+            if (this.currentInstrument === 'piano_samples') {
+              sustained.gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1);
+              sustained.source.stop(this.audioCtx.currentTime + 0.1);
+            } else {
+              sustained.gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1);
+              sustained.oscillator.stop(this.audioCtx.currentTime + 0.1);
+            }
+            this.sustainedNotes.delete(note);
           } catch (error) {
             console.error('Erro ao parar nota:', error);
           }
-          this.sustainedNotes.delete(note);
         }
+      }
+      
+      changeOctave(newOctave) {
+        this.currentOctave = newOctave;
+        this.createKeyboard();
+        document.querySelectorAll('.octave-btn').forEach(btn => {
+          btn.classList.remove('active');
+          if (parseInt(btn.dataset.octave) === newOctave) {
+            btn.classList.add('active');
+          }
+        });
+        this.showFeedback(`Oitava: C${newOctave}-B${newOctave}`);
       }
       
       updateCurrentNote(note) {
-        document.getElementById('currentNote').textContent = note;
-        this.showFeedback(note);
+        const currentNoteDisplay = document.getElementById('currentNote');
+        currentNoteDisplay.textContent = note;
+        currentNoteDisplay.style.opacity = 1;
+        
+        clearTimeout(this.noteFeedbackTimeout);
+        this.noteFeedbackTimeout = setTimeout(() => {
+          currentNoteDisplay.style.opacity = 0;
+        }, 1500);
       }
       
       checkForChord() {
-        const allActiveNotes = new Set([...this.activeNotes, ...this.sustainedKeys]);
-        const activeNoteNames = Array.from(allActiveNotes).map(note => note.replace(/\d+/, ''));
-        const chordDisplay = document.getElementById('currentChord');
+        const currentChordDisplay = document.getElementById('currentChord');
+        currentChordDisplay.textContent = '-';
+        currentChordDisplay.style.opacity = 0;
         
-        if (activeNoteNames.length < 3) {
-          chordDisplay.textContent = '-';
-          this.clearChordHighlights();
-          return;
-        }
+        // Remover highlights de acordes anteriores
+        document.querySelectorAll('.key.chord-highlight').forEach(key => {
+          key.classList.remove('chord-highlight');
+        });
+
+        const activeNotesArray = Array.from(this.activeNotes).map(note => note.slice(0, -1)); // Remove octave
         
-        for (const [chordName, chordNotes] of Object.entries(this.chordDefinitions)) {
-          if (this.arraysEqual(activeNoteNames.sort(), chordNotes.sort())) {
-            chordDisplay.textContent = chordName;
-            return;
+        for (const chordName in this.chordDefinitions) {
+          const chordNotes = this.chordDefinitions[chordName];
+          const isChord = chordNotes.every(note => activeNotesArray.includes(note));
+          
+          if (isChord && activeNotesArray.length === chordNotes.length) {
+            currentChordDisplay.textContent = chordName;
+            currentChordDisplay.style.opacity = 1;
+            
+            // Highlight keys that form the chord
+            chordNotes.forEach(noteBase => {
+              document.querySelectorAll(`.key[data-note^="${noteBase}"]`).forEach(key => {
+                key.classList.add('chord-highlight');
+              });
+            });
+            return; // Found a chord, exit
           }
         }
-        
-        chordDisplay.textContent = 'Personalizado';
-      }
-      
-      arraysEqual(a, b) {
-        return a.length === b.length && a.every((val, i) => val === b[i]);
       }
       
       setupChordButtons() {
-        document.getElementById('chordGrid').addEventListener('click', (e) => {
+        const chordGrid = document.getElementById('chordGrid');
+        chordGrid.addEventListener('click', async (e) => {
           if (e.target.classList.contains('chord-button')) {
             const chordName = e.target.dataset.chord;
-            this.playChord(chordName);
-            this.highlightChordButton(e.target);
+            const chordNotes = this.chordDefinitions[chordName];
+            
+            if (chordNotes) {
+              this.showFeedback(`Tocando acorde: ${chordName}`);
+              
+              // Remove previous chord highlights
+              document.querySelectorAll('.key.chord-highlight').forEach(key => {
+                key.classList.remove('chord-highlight');
+              });
+
+              // Highlight and play notes
+              for (const noteBase of chordNotes) {
+                // Find the note in the current octave range
+                let foundNote = null;
+                for (let i = 0; i < 2; i++) { // Check current and next octave displayed
+                  const fullNote = `${noteBase}${this.currentOctave + i}`;
+                  const keyElement = document.querySelector(`[data-note="${fullNote}"]`);
+                  if (keyElement) {
+                    foundNote = fullNote;
+                    keyElement.classList.add('chord-highlight');
+                    break;
+                  }
+                }
+                if (foundNote) {
+                  this.playNote(foundNote);
+                  // Simple decay for chord notes played via button
+                  setTimeout(() => {
+                    this.stopNote(foundNote);
+                    const keyElement = document.querySelector(`[data-note="${foundNote}"]`);
+                    if (keyElement) keyElement.classList.remove('chord-highlight');
+                  }, 1000); // Stop after 1 second
+                }
+              }
+            }
           }
         });
-      }
-      
-      playChord(chordName) {
-        const chordNotes = this.chordDefinitions[chordName];
-        if (!chordNotes) return;
-        
-        this.clearChordHighlights();
-        this.clearActiveNotes();
-        
-        chordNotes.forEach((noteName, index) => {
-          setTimeout(() => {
-            const fullNote = `${noteName}${this.currentOctave}`;
-            this.playNote(fullNote);
-            this.highlightChordKey(fullNote);
-            this.activeNotes.add(fullNote);
-          }, index * 100);
-        });
-        
-        document.getElementById('currentChord').textContent = chordName;
-        
-        setTimeout(() => {
-          this.clearChordHighlights();
-          this.clearActiveNotes();
-        }, 2000);
-      }
-      
-      highlightChordKey(note) {
-        const key = document.querySelector(`[data-note="${note}"]`);
-        if (key) {
-          key.classList.add('chord-highlight');
-          setTimeout(() => {
-            key.classList.remove('chord-highlight');
-          }, 2000);
-        }
-      }
-      
-      highlightChordButton(button) {
-        document.querySelectorAll('.chord-button').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        
-        setTimeout(() => {
-          button.classList.remove('active');
-        }, 2000);
-      }
-      
-      clearChordHighlights() {
-        document.querySelectorAll('.key').forEach(key => {
-          key.classList.remove('chord-highlight', 'active');
-        });
-      }
-      
-      clearActiveNotes() {
-        this.activeNotes.forEach(note => this.stopNote(note));
-        this.activeNotes.clear();
-        document.getElementById('currentChord').textContent = '-';
-      }
-      
-      changeOctave(octave) {
-        this.currentOctave = octave;
-        this.createKeyboard();
-        
-        document.querySelectorAll('.octave-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelector(`[data-octave="${octave}"]`).classList.add('active');
-        
-        this.clearActiveNotes();
-        this.sustainedKeys.clear();
-      }
-      
-      showFeedback(message) {
-        const feedback = document.getElementById('feedbackNote');
-        feedback.textContent = message;
-        feedback.style.opacity = '1';
-        
-        setTimeout(() => {
-          feedback.style.opacity = '0';
-        }, 1500);
       }
 
       setupMelodyButtons() {
-        document.getElementById('melodyGrid').addEventListener('click', (e) => {
+        const melodyGrid = document.getElementById('melodyGrid');
+        melodyGrid.addEventListener('click', async (e) => {
           if (e.target.classList.contains('melody-button')) {
             const melodyName = e.target.dataset.melody;
-            this.playMelody(melodyName);
+            const melody = this.melodies[melodyName];
+            
+            if (melody) {
+              this.showFeedback(`Tocando melodia: ${melodyName}`);
+              
+              // Stop any ongoing melody
+              if (this.melodyPlaybackInterval) {
+                clearInterval(this.melodyPlaybackInterval);
+              }
+              
+              let noteIndex = 0;
+              this.melodyPlaybackInterval = setInterval(() => {
+                if (noteIndex < melody.length) {
+                  const noteData = melody[noteIndex];
+                  const note = noteData.note;
+                  const duration = noteData.duration;
+                  
+                  // Remove previous highlights
+                  document.querySelectorAll('.key.active, .key.chord-highlight').forEach(key => {
+                    key.classList.remove('active', 'chord-highlight');
+                  });
+
+                  // Highlight and play note
+                  const keyElement = document.querySelector(`[data-note="${note}"]`);
+                  if (keyElement) {
+                    keyElement.classList.add('active');
+                    this.playNote(note);
+                    this.updateCurrentNote(note);
+                    
+                    // Stop note after its duration
+                    setTimeout(() => {
+                      this.stopNote(note);
+                      keyElement.classList.remove('active');
+                    }, duration * 1000); // Convert to milliseconds
+                  }
+                  noteIndex++;
+                } else {
+                  clearInterval(this.melodyPlaybackInterval);
+                  this.melodyPlaybackInterval = null;
+                  this.showFeedback('Melodia concluída!');
+                  // Clear all highlights after melody finishes
+                  document.querySelectorAll('.key.active, .key.chord-highlight').forEach(key => {
+                    key.classList.remove('active', 'chord-highlight');
+                  });
+                }
+              }, 500); // Base interval for melody playback (adjust as needed)
+            }
           }
         });
       }
 
-      playMelody(melodyName) {
-        if (this.melodyPlaybackInterval) {
-          clearInterval(this.melodyPlaybackInterval);
-          this.melodyPlaybackInterval = null;
-          this.clearActiveNotes();
-          this.showFeedback('Melodia Parada');
-          return;
-        }
-
-        const melody = this.melodies[melodyName];
-        if (!melody) return;
-
-        let noteIndex = 0;
-        const tempo = 120; // BPM
-        const beatDuration = 60 / tempo; // Duration of a beat in seconds
-
-        this.showFeedback(`Tocando: ${melodyName}`);
-
-        this.melodyPlaybackInterval = setInterval(() => {
-          if (noteIndex < melody.length) {
-            const note = melody[noteIndex];
-            this.playNote(note.note);
-            this.highlightKey(note.note);
-            this.updateCurrentNote(note.note);
-
-            setTimeout(() => {
-              this.stopNote(note.note);
-              this.unhighlightKey(note.note);
-            }, note.duration * beatDuration * 1000 * 0.8); // Stop note slightly before next
-
-            noteIndex++;
-          } else {
-            clearInterval(this.melodyPlaybackInterval);
-            this.melodyPlaybackInterval = null;
-            this.clearActiveNotes();
-            this.showFeedback('Melodia Concluída');
-          }
-        }, beatDuration * 1000);
-      }
-
-      highlightKey(note) {
-        const key = document.querySelector(`[data-note="${note}"]`);
-        if (key) {
-          key.classList.add('active');
-        }
-      }
-
-      unhighlightKey(note) {
-        const key = document.querySelector(`[data-note="${note}"]`);
-        if (key) {
-          key.classList.remove('active');
-        }
+      showFeedback(message) {
+        const feedbackNote = document.getElementById('feedbackNote');
+        feedbackNote.textContent = message;
+        feedbackNote.style.opacity = 1;
+        clearTimeout(this.feedbackTimeout);
+        this.feedbackTimeout = setTimeout(() => {
+          feedbackNote.style.opacity = 0;
+        }, 2000);
       }
     }
     
-    // Inicializar o piano quando a página carregar
-    document.addEventListener('DOMContentLoaded', () => {
-      new PianoVirtual();
-    });
+    const piano = new PianoVirtual();
   </script>
 </body>
 </html>
+
 
